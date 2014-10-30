@@ -1,0 +1,391 @@
+% \iffalse meta-comment
+%
+% Copyright (C) 2014 by Zhengyun Zhang
+%
+% This file may be distributed and/or modified under the
+% conditions of the LaTeX Project Public License, either
+% version 1.2 of this license or (at your option) any later 
+% version. The latest version of this license is in:
+%
+% http://www.latex-project.org/lppl.txt
+%
+% and version 1.2 or later is part of all distributions of 
+% LaTeX version 1999/12/01 or later.
+%
+% \fi
+%
+% \iffalse
+%<*driver>
+\ProvidesFile{extractfloats.dtx}
+%</driver>
+%<package>\NeedsTeXFormat{LaTeX2e}[1999/12/01]
+%<package>\ProvidesPackage{extractfloats}
+%<*package>
+    [2014/09/18 v1.0 Generate separate floats using pdfLaTeX]
+%</package>
+%
+%<*driver>
+\documentclass{ltxdoc}
+\usepackage{extractfloats}[2014/09/18]
+\EnableCrossrefs
+\CodelineIndex
+\RecordChanges
+\begin{document}
+  \DocInput{extractfloats.dtx}
+  \PrintChanges
+  \PrintIndex
+\end{document}
+%</driver>
+% \fi
+%
+% \CheckSum{339}
+%
+% \CharacterTable
+%  {Upper-case    \A\B\C\D\E\F\G\H\I\J\K\L\M\N\O\P\Q\R\S\T\U\V\W\X\Y\Z
+%   Lower-case    \a\b\c\d\e\f\g\h\i\j\k\l\m\n\o\p\q\r\s\t\u\v\w\x\y\z
+%   Digits        \0\1\2\3\4\5\6\7\8\9
+%   Exclamation   \!     Double quote  \"     Hash (number) \#
+%   Dollar        \$     Percent       \%     Ampersand     \&
+%   Acute accent  \'     Left paren    \(     Right paren   \)
+%   Asterisk      \*     Plus          \+     Comma         \,
+%   Minus         \-     Point         \.     Solidus       \/
+%   Colon         \:     Semicolon     \;     Less than     \<
+%   Equals        \=     Greater than  \>     Question mark \?
+%   Commercial at \@     Left bracket  \[     Backslash     \\
+%   Right bracket \]     Circumflex    \^     Underscore    \_
+%   Grave accent  \`     Left brace    \{     Vertical bar  \|
+%   Right brace   \}     Tilde         \~}
+%
+%
+% \changes{v1.0}{2014/09/18}{Initial version}
+%
+% \GetFileInfo{extractfloats.dtx}
+%
+% \DoNotIndex{}
+% 
+%
+% \title{The \textsf{extractfloats} package\thanks{This document
+%   corresponds to \textsf{extractfloats}~\fileversion, dated \filedate.}}
+% \author{Zhengyun Zhang \\ \texttt{zhengyun.zhang@smart.mit.edu}}
+%
+% \maketitle
+%
+% \section{Introduction}
+%
+% \textsf{extractfloats} was developed as a way to produce a single
+% image file of the appropriate size for each float in a document, as
+% is required by some publishers.  It has been tested to work with
+% both the \textsf{article} class and the \textsf{revtex4-1} class.
+% Although it provides similar functionality to the \textsf{preview}
+% package, it does so in a different manner---by creating a PDF of the
+% entire document, recording where each float is, and then generating
+% pdf\LaTeX\ files to crop the desired floats out, with or without
+% captions.  Thus, it requires multiple runs of pdf\LaTeX\ and the
+% \textsf{graphicx} package to properly function.
+%
+% This document was created using the |skeleton.dtx| template provided
+% by Scott Pakin's wonderful \textsf{dtxtut} tutorial on packaging a
+% \LaTeX\ package.
+%
+% \section{Usage}
+%
+% First, include this package in the document source by invoking it in
+% the preamble:
+% \begin{verbatim}
+%     \usepackage{extractfloats}
+% \end{verbatim}% 
+% You can also tell this package to include the captions as well by
+% passing in the |captions| option:
+% \begin{verbatim}
+%     \usepackage[captions]{extractfloats}
+% \end{verbatim}%
+%
+% Next, run pdf\LaTeX\ on the modified source file until a desired
+% PDF of the original document has been generated. Running
+% pdf\LaTeX\ should have generated several extra files.  For
+% example, if the original document were called |foo.tex| and it
+% contained two floats, files named |foo_float1.tex| and
+% |foo_float2.tex| should have been generated.
+%
+% Finally, making sure that the original PDF is still present, run
+% pdf\LaTeX\ on each of the generated files to create a PDF for each
+% of the desired floats.
+%
+% \StopEventually{}
+%
+% \section{Implementation}
+%
+% The implementation documentation here is intended to explain how
+% this package works.  None of the defined macros are publicly
+% accessible, as the package is designed to work with a single
+% |usepackage| invocation.
+%
+% \subsection{Preliminaries}
+% First, we make sure that |graphicx| is present, because it'll be
+% used later by the generated pdf\LaTeX\ files.
+%    \begin{macrocode}
+\RequirePackage{graphicx}
+%    \end{macrocode}
+% \begin{macro}{ef@infloat}
+% We use this flag to keep track of whether we've opened a
+% pdf\LaTeX\ file for generating a separate float PDF and haven't
+% finished writing to it yet.
+%    \begin{macrocode}
+\newif\ifef@infloat
+\ef@infloatfalse
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{ef@includecaption}
+% This flag is true if |captions| was passed as an option to this
+% package (and if so, captions should be included in the extracted
+% floats.)
+%    \begin{macrocode}
+\newif\ifef@includecaption
+\ef@includecaptionfalse
+\DeclareOption{captions}{\ef@includecaptiontrue}
+\ProcessOptions\relax
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\ef@exportfile}
+% This macro is the file handle with which we will use to write
+% \LaTeX\ files for each float.
+%    \begin{macrocode}
+\newwrite\ef@exportfile
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{ef@float}
+% This macro is a counter to keep track of how many floats have been
+% processed.  This way we can uniquely number each float.
+%    \begin{macrocode}
+\newcounter{ef@float}
+%    \end{macrocode}
+% \end{macro}
+%
+% \subsection{Fragments}
+% Next, we will define some code fragments that will be automatically
+% inserted into the float environments as well as the |\caption| call.
+% \begin{macro}{\ef@beginfloat}
+% This macro opens a new output file with the proper numbering and
+% lets subsequent know that such a file has been opened.
+%    \begin{macrocode}
+\def\ef@beginfloat{
+\stepcounter{ef@float}
+\openout\ef@exportfile="\expandafter\jobname_float\expandafter%
+    \arabic{ef@float}.tex"
+\global\ef@infloattrue
+}
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\ef@labelfigure}
+% This macro inserts the figure name into the top of the
+% document. \emph{Note: this does not handle figures without captions
+% properly.}
+%    \begin{macrocode}
+\def\ef@labelfigure{
+\stepcounter{figure}
+\edef\next{\write\ef@exportfile{\@percentchar\@percentchar\space%
+    \figurename\space\thefigure}}\next
+\addtocounter{figure}{-1}
+}
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\ef@labeltable}
+% Similarly, this macro applies to tables. \emph{Note: this does not
+% handle tables without captions properly.}
+%    \begin{macrocode}
+\def\ef@labeltable{
+\stepcounter{table}
+\edef\next{\write\ef@exportfile{\@percentchar\@percentchar\space%
+    \tablename\space\thetable}}\next
+\addtocounter{table}{-1}
+}
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\ef@grabtop}
+% This macro writes the first part of the output file, including the
+% coordinate of the top left corner of the desired float to be
+% exported as well as a definition for all the lengths to be used.
+%    \begin{macrocode}
+\def\ef@grabtop{
+\pdfsavepos
+\write\ef@exportfile{\string\documentclass{article}}
+\write\ef@exportfile{\string\usepackage{graphicx}}
+\write\ef@exportfile{\string\newlength\string\figtop}
+\write\ef@exportfile{\string\newlength\string\figbottom}
+\write\ef@exportfile{\string\newlength\string\figleft}
+\write\ef@exportfile{\string\newlength\string\figright}
+\write\ef@exportfile{\string\newlength\string\figwidth}
+\write\ef@exportfile{\string\newlength\string\figheight}
+\write\ef@exportfile{\string\setlength\string\figleft{\the%
+    \pdflastxpos sp}}
+\write\ef@exportfile{\string\setlength\string\figtop{\the%
+    \pdflastypos sp}}
+}
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\ef@grabbottom}
+% This macro writes the rest of the output file, including the
+% y coordinate of the bottom of the desired float and closes it.
+%    \begin{macrocode}
+\def\ef@grabbottom{
+\pdfsavepos
+\write\ef@exportfile{\string\setlength\string\figbottom{\the%
+    \pdflastypos sp}}
+%    \end{macrocode}
+% Here, we use an |\edef| to burn in the value for |\linewidth|
+% because this length can change by |\shipout| time.
+%    \begin{macrocode}
+\edef\next{\write\ef@exportfile{\string\setlength\string\figwidth{%
+      \the\linewidth}}}\next
+%    \end{macrocode}
+% This segment uses the generated pdf\LaTeX\ code to calculate the
+% height of the figure
+%    \begin{macrocode}
+\write\ef@exportfile{%
+\string\setlength\string\figheight\string\figtop%
+\string\addtolength\string\figheight{-\string\figbottom}
+}
+\write\ef@exportfile{%
+\string\setlength\string\figright\string\figleft%
+\string\addtolength\string\figright\string\figwidth
+}
+%    \end{macrocode}
+% We use the \textsf{geometry} package to set the dimensions of the
+% output to be the same as the float.
+%    \begin{macrocode}
+\write\ef@exportfile{
+\string\usepackage[papersize={\string\figwidth,%
+\string\figheight},margin=0pt]{geometry}}
+%    \end{macrocode}
+% We create a minimal document that includes the full
+% document, using \textsf{graphicx} to crop out the desired float from
+% the right page.
+%    \begin{macrocode}
+\write\ef@exportfile{\string\begin{document}}
+\write\ef@exportfile{\string\noindent
+\string\includegraphics[page=\thepage,viewport=\string\figleft{} 
+  \string\figbottom{} \string\figright{} 
+  \string\figtop{},clip]{\jobname}}
+\write\ef@exportfile{\string\end{document}}
+%    \end{macrocode}
+% Finally, close the output file and reset the state
+%    \begin{macrocode}
+\closeout\ef@exportfile
+\global\ef@infloatfalse
+}
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\ef@incaption}
+% This macro is embedded in the |\caption| macro to optionally finish
+% the exported float before the caption starts.  It will also spawn an
+% error if a file had not been opened, i.e. if a |\caption| was found
+% outside of a float.
+%    \begin{macrocode}
+\def\ef@incaption{
+\ifef@infloat
+\ifef@includecaption
+\else
+\ef@grabbottom
+\fi
+\else
+\PackageError{extractfloats}{%
+\string\ef@grabbottom (i.e. \string\caption) called 
+when not inside a supported float}{}
+\fi
+}
+%    \end{macrocode}
+% \end{macro}
+% \begin{macro}{\ef@endfloat}
+% This macro is used before a float environment ends to finish up an
+% exported float.
+%    \begin{macrocode}
+\def\ef@endfloat{\ifef@infloat%
+\par%
+\ef@grabbottom%
+\fi%
+}
+%    \end{macrocode}
+% \end{macro}
+% \subsection{Overrides}
+% Now we will write code to redefine the float environments as well as
+% the functionality of the |\caption| call to insert our code
+% snippets.  Much of this was based on ideas from Will Robertson's
+% post (http://stackoverflow.com/a/1569922) on Stack Overflow.
+%
+% First, we must wrap the environment definitions.  These are pretty
+% standard and seem to work across different classes.
+%    \begin{macrocode}
+\renewenvironment{figure}[1][\fps@figure]{
+  \edef\@tempa{\noexpand\@float{figure}[#1]}
+  \@tempa\ef@beginfloat\ef@labelfigure\ef@grabtop
+}{\ef@endfloat\end@float}
+
+\renewenvironment{figure*}[1][\fps@figure]{
+  \edef\@tempa{\noexpand\@dblfloat{figure}[#1]}
+  \@tempa\ef@beginfloat\ef@labelfigure\ef@grabtop
+}{\ef@endfloat\end@dblfloat}
+
+\renewenvironment{table}[1][\fps@table]{
+  \edef\@tempa{\noexpand\@float{table}[#1]}
+  \@tempa\ef@beginfloat\ef@labeltable\ef@grabtop
+}{\ef@endfloat\end@float}
+
+\renewenvironment{table*}[1][\fps@table]{
+  \edef\@tempa{\noexpand\@dblfloat{table}[#1]}
+  \@tempa\ef@beginfloat\ef@labeltable\ef@grabtop
+}{\ef@endfloat\end@dblfloat}
+%    \end{macrocode}
+% Next we need to insert the |\ef@incaption| macro into the |\caption|
+% definitions.  This is slightly trickier, because \textsf{revtex4-1}
+% has a slightly different implementation of |\@makecaption| compared
+% to the standard \LaTeX distribution.  Thus, we first check to see if
+% \textsf{revtex4-1} is being used.  If so, we modify the
+% \textsf{revtex4-1}-specific version of |\@makecaption|
+%    \begin{macrocode}
+\@ifclassloaded{revtex4-1}
+{
+  \long\def\@makecaption#1#2{%
+    \ef@incaption
+    \par
+    \vskip\abovecaptionskip
+    \begingroup
+    \small\rmfamily
+    \sbox\@tempboxa{%
+      \let\\\heading@cr
+      \@make@capt@title{#1}{#2}%
+    }%
+    \@ifdim{\wd\@tempboxa >\hsize}{%
+      \begingroup
+      \samepage
+      \flushing
+      \let\footnote\@footnotemark@gobble
+      \@make@capt@title{#1}{#2}\par
+      \endgroup
+    }{%
+      \global \@minipagefalse
+      \hb@xt@\hsize{\hfil\unhbox\@tempboxa\hfil}%
+    }%
+    \endgroup
+    \vskip\belowcaptionskip
+  }%
+}
+%    \end{macrocode}
+% For all other cases, we assume that the original definition of
+% |\@makecaption| is the same as the one from the standard \LaTeX:
+%    \begin{macrocode}
+{
+  \long\def\@makecaption#1#2{%
+    \ef@incaption
+    \vskip\abovecaptionskip
+    \sbox\@tempboxa{#1: #2}%
+    \ifdim \wd\@tempboxa >\hsize
+      #1: #2\par
+    \else
+      \global \@minipagefalse
+      \hb@xt@\hsize{\hfil\box\@tempboxa\hfil}%
+    \fi
+    \vskip\belowcaptionskip}
+}
+%    \end{macrocode}
+% \Finale
+\endinput
